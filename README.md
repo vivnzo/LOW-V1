@@ -1,102 +1,82 @@
---[[
-	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
-]]
-local player=game.Players.LocalPlayer
-local workspace=game.Workspace
-local lighting=game.Lighting
-local RunService=game:GetService("RunService")
-local camera=workspace.CurrentCamera
-local LOW_QUALITY=true
-local VOXEL_SIZE=1.2
-local BLUR_INTENSITY=10
-local MAX_PARTS=8000
-local DISABLE_SHAD=true
-local FLAT_COLORS=true
-lighting.GlobalShadows=false
-lighting.Brightness=0.5
-lighting.Ambient=Color3.new(0.4,0.4,0.4)
-lighting.OutdoorAmbient=Color3.new(0.3,0.3,0.3)
-lighting.ShadowSoftness=0
-lighting.EnvironmentDiffuseScale=0
-lighting.EnvironmentSpecularScale=0
-lighting.Technology=Enum.Technology.Compatibility
-for _,light in pairs(lighting:GetChildren())do if light:IsA("Light")then light.Enabled=false end end
-for _,obj in pairs(workspace:GetDescendants())do
-if obj:IsA("Light")then obj.Enabled=false end
-if obj:IsA("Atmosphere")then obj.Enabled=false end
-if obj:IsA("BloomEffect")or obj:IsA("BlurEffect")or obj:IsA("ColorCorrectionEffect")or obj:IsA("DepthOfFieldEffect")or obj:IsA("SunRaysEffect")then obj.Enabled=false end
+-- Safe Cosmic Max Anti-Lag & Texture Stripper
+-- يحسن الأداء الأقصى مع حماية كاملة لشخصية اللاعب وأدوات القتال لمنع التجمد
+
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local Terrain = Workspace:FindFirstChildOfClass("Terrain")
+local LocalPlayer = Players.LocalPlayer
+
+-- تعطيل إعدادات الإضاءة المسببة للاق وإزالة الظلال
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 9e9
+Lighting.Brightness = 1
+
+-- إزالة تأثيرات ما بعد المعالجة البصرية
+for _, effect in ipairs(Lighting:GetChildren()) do
+    if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") then
+        effect.Enabled = false
+    end
 end
-for _,obj in pairs(workspace:GetDescendants())do
-if obj:IsA("BasePart")then
-obj.Material=Enum.Material.Plastic
-for _,child in pairs(obj:GetChildren())do
-if child:IsA("Texture")or child:IsA("Decal")or child:IsA("SurfaceAppearance")then child:Destroy()end
+
+-- تحسين إعدادات التضاريس والمياه
+if Terrain then
+    Terrain.WaterWaveSize = 0
+    Terrain.WaterWaveSpeed = 0
+    Terrain.WaterReflectance = 0
+    Terrain.WaterTransparency = 0
 end
-if FLAT_COLORS then
-obj.Color=Color3.new(math.random(20,80)/100,math.random(20,80)/100,math.random(20,80)/100)
+
+-- دالة الفحص لحماية اللاعب وأدوات القتال من الأعطال
+local function IsSafeToModify(object)
+    -- استثناء أدوات القتال والأسلحة (Tools) ومحتوياتها تماماً
+    if object:IsA("Tool") or object:FindFirstAncestorOfClass("Tool") then
+        return false
+    end
+    
+    -- استثناء شخصية اللاعب الحالي لمنع تجمد الحركة والقفز
+    if LocalPlayer.Character and (object == LocalPlayer.Character or object:IsAncestorOf(LocalPlayer.Character)) then
+        return false
+    end
+    
+    -- استثناء شخصيات اللاعبين الآخرين لضمان استقرار نظام اللعبة وعدم كسر التفاعل
+    local possibleModel = object:FindFirstAncestorOfClass("Model")
+    if possibleModel and Players:GetPlayerFromCharacter(possibleModel) then
+        return false
+    end
+
+    return true
 end
+
+-- دالة تحسين العناصر وتنعيم الأسطح
+local function OptimizeObject(object)
+    -- التحقق من أمان العنصر قبل التعديل عليه
+    if not IsSafeToModify(object) then return end
+
+    -- إزالة الملصقات والأنسجة تماماً من الخريطة
+    if object:IsA("Decal") or object:IsA("Texture") then
+        object:Destroy()
+    -- تعطيل الجسيمات والتأثيرات الحركية
+    elseif object:IsA("ParticleEmitter") or object:IsA("Trail") or object:IsA("Beam") then
+        object.Enabled = false
+    elseif object:IsA("Fire") or object:IsA("Smoke") or object:IsA("Sparkles") then
+        object.Enabled = false
+    -- تحويل أسطح الماب إلى بلاستيك ناعم بلون صافي خالي من الانعكاسات
+    elseif object:IsA("BasePart") or object:IsA("MeshPart") then
+        object.Material = Enum.Material.SmoothPlastic
+        object.Reflectance = 0
+    -- إزالة الملابس غير الضرورية من مجسمات الماب البيئية
+    elseif object:IsA("Shirt") or object:IsA("Pants") or object:IsA("ShirtGraphic") or object:IsA("Clothing") then
+        object:Destroy()
+    end
 end
-if obj:IsA("ParticleEmitter")or obj:IsA("Trail")or obj:IsA("Beam")or obj:IsA("Smoke")or obj:IsA("Fire")then
-obj.Enabled=false
-obj.Rate=0
+
+-- تطبيق التعديل الآمن على عناصر الخريطة الحالية
+for _, object in ipairs(Workspace:GetDescendants()) do
+    pcall(OptimizeObject, object)
 end
-end
-for _,obj in pairs(workspace:GetDescendants())do
-if obj:IsA("MeshPart")or obj:IsA("UnionOperation")then
-obj.RenderFidelity=Enum.RenderFidelity.Performance
-end
-if obj:IsA("SpecialMesh")then obj:Destroy()end
-end
-local partCount=0
-local function potatoVoxel(part)
-if partCount>MAX_PARTS or part.Parent==player.Character or not LOW_QUALITY then return end
-partCount+=1
-local size=part.Size
-local cf=part.CFrame
-local steps=Vector3.new(1,1,1)/VOXEL_SIZE
-for x=1,math.ceil(size.X*steps.X)do
-for y=1,math.ceil(size.Y*steps.Y)do
-for z=1,math.ceil(size.Z*steps.Z)do
-if partCount>MAX_PARTS then return end
-local voxel=Instance.new("Part")
-voxel.Name="PotatoVoxel"
-voxel.Size=Vector3.new(VOXEL_SIZE,VOXEL_SIZE,VOXEL_SIZE)
-voxel.Material=Enum.Material.Plastic
-voxel.Color=part.Color
-voxel.Anchored=part.Anchored
-voxel.CanCollide=false
-voxel.TopSurface=Enum.SurfaceType.SmoothNoOutlines
-local offset=Vector3.new((x-0.5)*VOXEL_SIZE-size.X/2,(y-0.5)*VOXEL_SIZE-size.Y/2,(z-0.5)*VOXEL_SIZE-size.Z/2)
-voxel.CFrame=cf+cf:VectorToWorldSpace(offset)
-voxel.Parent=part.Parent
-end
-end
-end
-part:Destroy()
-end
-spawn(function()
-for _,part in pairs(workspace:GetDescendants())do
-if part:IsA("BasePart")and not part.Parent:FindFirstChild("Humanoid")then
-spawn(function()potatoVoxel(part)end)
-end
-wait(0.001)
-end
+
+-- مراقبة وتصفية العناصر الجديدة المضافة ديناميكياً مع استمرار الحماية
+Workspace.DescendantAdded:Connect(function(object)
+    pcall(OptimizeObject, object)
 end)
-workspace.DescendantAdded:Connect(function(obj)
-wait(0.05)
-if obj:IsA("BasePart")then
-obj.Material=Enum.Material.Plastic
-obj.CastShadow=false
-for _,child in pairs(obj:GetChildren())do
-if child:IsA("Texture")or child:IsA("Decal")then child:Destroy()end
-end
-if LOW_QUALITY then spawn(function()potatoVoxel(obj)end)end
-end
-end)
-local blur=Instance.new("BlurEffect")
-blur.Size=BLUR_INTENSITY
-blur.Parent=camera
-local terrain=workspace.Terrain
-terrain.WaterTransparency=1
-terrain.WaterReflectance=0
-terrain:Clear()
